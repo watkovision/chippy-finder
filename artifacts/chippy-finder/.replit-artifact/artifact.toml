@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Chippy Finder"
+version = "1.0.0"
+id = "artifacts/chippy-finder"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24648
+
+[services.development]
+run = "pnpm --filter @workspace/chippy-finder run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/chippy-finder", "run", "build" ]
+publicDir = "artifacts/chippy-finder/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24648"
+BASE_PATH = "/"

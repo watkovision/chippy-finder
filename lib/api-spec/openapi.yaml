@@ -3,13 +3,15 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Chippy Finder API - Find fish & chip shops near you in Great Britain
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: chipshops
+    description: Chip shop operations
 paths:
   /healthz:
     get:
@@ -24,6 +26,90 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /chipshops/nearby:
+    get:
+      operationId: listNearbyChipShops
+      tags: [chipshops]
+      summary: Get chip shops near a location
+      description: Returns a list of fish & chip shops near the given GPS coordinates in England, Wales and Scotland, including hygiene ratings from the Food Standards Agency
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          schema:
+            type: number
+          description: Latitude of the user's location
+        - name: lng
+          in: query
+          required: true
+          schema:
+            type: number
+          description: Longitude of the user's location
+        - name: radius
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Search radius in metres (default 5000)
+      responses:
+        "200":
+          description: List of nearby chip shops
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ChipShop"
+        "400":
+          description: Invalid coordinates
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Upstream data source unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /chipshops/summary:
+    get:
+      operationId: getNearbySummary
+      tags: [chipshops]
+      summary: Get a summary of chip shops near a location
+      description: Returns stats and a fun fact about chip shops near the given GPS coordinates
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          schema:
+            type: number
+        - name: lng
+          in: query
+          required: true
+          schema:
+            type: number
+        - name: radius
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Summary data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NearbySummary"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +120,97 @@ components:
       required:
         - status
 
+    ChipShop:
+      type: object
+      required:
+        - id
+        - name
+        - lat
+        - lng
+        - distanceMetres
+        - nation
+      properties:
+        id:
+          type: string
+          description: Unique identifier (OSM node ID)
+        name:
+          type: string
+          description: Name of the chip shop
+        lat:
+          type: number
+          description: Latitude
+        lng:
+          type: number
+          description: Longitude
+        distanceMetres:
+          type: number
+          description: Distance in metres from the user's location
+        address:
+          type: ["string", "null"]
+          description: Full formatted address
+        postcode:
+          type: ["string", "null"]
+          description: Postcode
+        phone:
+          type: ["string", "null"]
+          description: Phone number
+        website:
+          type: ["string", "null"]
+          description: Website URL
+        openingHours:
+          type: ["string", "null"]
+          description: Opening hours string
+        hygieneRating:
+          type: ["integer", "null"]
+          description: Food Standards Agency hygiene rating (0-5)
+        hygieneRatingLabel:
+          type: ["string", "null"]
+          description: Human-readable hygiene rating label e.g. "5 - Very Good"
+        hygieneRatingDate:
+          type: ["string", "null"]
+          description: ISO date string of last hygiene inspection
+        localAuthority:
+          type: ["string", "null"]
+          description: Local authority name from FSA
+        cuisine:
+          type: ["string", "null"]
+          description: Cuisine type tag from OSM
+        nation:
+          type: string
+          enum: [england, wales, scotland, unknown]
+          description: Which nation of Great Britain the shop is in
+
+    NearbySummary:
+      type: object
+      required:
+        - totalFound
+        - searchRadiusMetres
+        - topRatedCount
+        - funFact
+      properties:
+        totalFound:
+          type: integer
+          description: Total chip shops found in the search area
+        searchRadiusMetres:
+          type: integer
+        topRatedCount:
+          type: integer
+          description: Count of shops with hygiene rating 4 or 5
+        averageDistanceMetres:
+          type: ["number", "null"]
+        nearestName:
+          type: ["string", "null"]
+          description: Name of the nearest chip shop
+        nearestDistanceMetres:
+          type: ["number", "null"]
+        funFact:
+          type: string
+          description: A fun fact about British chip shops
+
+    ApiError:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string

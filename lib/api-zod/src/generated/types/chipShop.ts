@@ -5,22 +5,7 @@
  * Chippy Finder API - Find fish & chip shops near you in Great Britain
  * OpenAPI spec version: 0.1.0
  */
-export interface HealthStatus {
-  status: string;
-}
-
-/**
- * Which nation of Great Britain the shop is in
- */
-export type ChipShopNation = typeof ChipShopNation[keyof typeof ChipShopNation];
-
-
-export const ChipShopNation = {
-  england: 'england',
-  wales: 'wales',
-  scotland: 'scotland',
-  unknown: 'unknown',
-} as const;
+import type { ChipShopNation } from './chipShopNation';
 
 export interface ChipShop {
   /** Unique identifier (OSM node ID) */
@@ -86,48 +71,3 @@ export interface ChipShop {
   /** Which nation of Great Britain the shop is in */
   nation: ChipShopNation;
 }
-
-export interface NearbySummary {
-  /** Total chip shops found in the search area */
-  totalFound: number;
-  searchRadiusMetres: number;
-  /** Count of shops with hygiene rating 4 or 5 */
-  topRatedCount: number;
-  /** @nullable */
-  averageDistanceMetres?: number | null;
-  /**
-     * Name of the nearest chip shop
-     * @nullable
-     */
-  nearestName?: string | null;
-  /** @nullable */
-  nearestDistanceMetres?: number | null;
-  /** A fun fact about British chip shops */
-  funFact: string;
-}
-
-export interface ApiError {
-  error: string;
-}
-
-export type ListNearbyChipShopsParams = {
-/**
- * Latitude of the user's location
- */
-lat: number;
-/**
- * Longitude of the user's location
- */
-lng: number;
-/**
- * Search radius in metres (default 5000)
- */
-radius?: number;
-};
-
-export type GetNearbySummaryParams = {
-lat: number;
-lng: number;
-radius?: number;
-};
-
