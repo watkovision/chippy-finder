@@ -8,17 +8,39 @@ import {
 } from "@workspace/api-client-react";
 import { MapPin, Navigation, MapPinOff, Fish, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ChippyCard } from "@/components/ChippyCard";
 import { SummaryCard } from "@/components/SummaryCard";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistance } from "@/lib/utils";
 
-export default function Home() {
-  const { lat, lng, loading: geoLoading, error: geoError, requestLocation, permissionStatus } = useGeolocation();
-  const [radius, setRadius] = useState<number>(5000); // Default 5km
+async function geocodePostcode(postcode: string): Promise<{ lat: number; lng: number }> {
+  const encoded = encodeURIComponent(postcode.trim());
+  const res = await fetch(
+    `https://nominatim.openstreetmap.org/search?q=${encoded}&countrycodes=gb&format=json&limit=1`,
+    { headers: { "User-Agent": "ChippyFinder/1.0" } }
+  );
+  if (!res.ok) throw new Error("Postcode lookup failed");
+  const data = await res.json() as Array<{ lat: string; lon: string }>;
+  if (!data.length) throw new Error("Postcode not found");
+  return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+}
 
+export default function Home() {
+  const { lat: gpsLat, lng: gpsLng, loading: geoLoading, error: geoError, requestLocation, permissionStatus } = useGeolocation();
+
+  const [manualLat, setManualLat] = useState<number | null>(null);
+  const [manualLng, setManualLng] = useState<number | null>(null);
+  const [postcode, setPostcode] = useState("");
+  const [postcodeLoading, setPostcodeLoading] = useState(false);
+  const [postcodeError, setPostcodeError] = useState<string | null>(null);
+  const [radius, setRadius] = useState<number>(5000);
+
+  const lat = manualLat ?? gpsLat;
+  const lng = manualLng ?? gpsLng;
   const hasLocation = lat !== null && lng !== null;
+
   const queryParams = hasLocation ? { lat, lng, radius } : undefined;
 
   const { 
@@ -48,7 +70,23 @@ export default function Home() {
     }
   );
 
-  const isLoading = geoLoading || (hasLocation && (shopsLoading || summaryLoading));
+  const isLoading = geoLoading || postcodeLoading || (hasLocation && (shopsLoading || summaryLoading));
+
+  async function handlePostcodeSearch(e: React.FormEvent) {
+    e.preventDefault();
+    if (!postcode.trim()) return;
+    setPostcodeLoading(true);
+    setPostcodeError(null);
+    try {
+      const { lat, lng } = await geocodePostcode(postcode);
+      setManualLat(lat);
+      setManualLng(lng);
+    } catch {
+      setPostcodeError("Couldn't find that postcode — double-check it and try again.");
+    } finally {
+      setPostcodeLoading(false);
+    }
+  }
 
   return (
     <div className="min-h-[100dvh] bg-background font-sans pb-24">
@@ -82,7 +120,7 @@ export default function Home() {
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 pt-8 pb-12 space-y-8">
         {!hasLocation && !isLoading && (
-          <div className="py-20 flex flex-col items-center justify-center text-center max-w-lg mx-auto space-y-8 animate-in fade-in zoom-in-95 duration-500">
+          <div className="py-16 flex flex-col items-center justify-center text-center max-w-lg mx-auto space-y-8 animate-in fade-in zoom-in-95 duration-500">
             <div className="w-24 h-24 bg-primary/10 rounded-full flex items-center justify-center text-primary mb-2 shadow-inner">
               <MapPin className="w-12 h-12" />
             </div>
@@ -115,8 +153,31 @@ export default function Home() {
               onClick={requestLocation}
             >
               <Navigation className="w-5 h-5 mr-2" />
-              Find my nearest chippy
+              Use my location
             </Button>
+
+            {/* Postcode fallback */}
+            <div className="w-full max-w-md space-y-2">
+              <p className="text-sm text-muted-foreground">
+                Or search by postcode:
+              </p>
+              <form onSubmit={handlePostcodeSearch} className="flex gap-2">
+                <Input
+                  type="text"
+                  placeholder="e.g. SW1A 1AA"
+                  value={postcode}
+                  onChange={e => setPostcode(e.target.value)}
+                  className="flex-1 bg-card text-base uppercase placeholder:normal-case"
+                  maxLength={8}
+                />
+                <Button type="submit" disabled={postcodeLoading || !postcode.trim()} className="px-5">
+                  <Search className="w-4 h-4" />
+                </Button>
+              </form>
+              {postcodeError && (
+                <p className="text-sm text-destructive">{postcodeError}</p>
+              )}
+            </div>
           </div>
         )}
 
@@ -144,7 +205,17 @@ export default function Home() {
                 <h3 className="text-2xl font-display font-bold text-foreground">
                   Found {chipShops.length} shops near you
                 </h3>
-                <span className="text-muted-foreground text-sm font-medium">Sorted by distance</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-muted-foreground text-sm font-medium">Sorted by distance</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs text-muted-foreground"
+                    onClick={() => { setManualLat(null); setManualLng(null); setPostcode(""); }}
+                  >
+                    Change location
+                  </Button>
+                </div>
               </div>
               
               {shopsError ? (
