@@ -17,7 +17,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "your-replit-dev-domain.replit.dev"
+        "EXPO_PUBLIC_DOMAIN": "YOUR-APP-NAME.replit.app"
       }
     },
     "production": {
@@ -25,7 +25,7 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "your-replit-dev-domain.replit.dev"
+        "EXPO_PUBLIC_DOMAIN": "YOUR-APP-NAME.replit.app"
       }
     }
   },
