@@ -22,6 +22,7 @@ export default function ChippyMap(_props: {
   coords: { lat: number; lng: number };
   shops: ChipShop[];
   radiusMetres: number;
+  favouriteIds?: string[];
 }) {
   const colors = useColors();
 

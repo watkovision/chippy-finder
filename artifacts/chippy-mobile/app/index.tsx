@@ -24,10 +24,12 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import ChippyMap from "@/components/ChippyMap";
+import FavouritesRail from "@/components/FavouritesRail";
 import LoadingSkeletons from "@/components/LoadingSkeletons";
 import ShopCard from "@/components/ShopCard";
 import SummaryBanner from "@/components/SummaryBanner";
 import { useColors } from "@/hooks/useColors";
+import { useFavourites } from "@/hooks/useFavourites";
 
 const RADIUS_OPTIONS = [
   { label: "1km", value: 1000 },
@@ -42,6 +44,7 @@ type ViewMode = "list" | "map";
 export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { favourites, favouriteIds, isFavourite, toggleFavourite, loaded: favsLoaded } = useFavourites();
 
   const [coords, setCoords] = useState<Coords | null>(null);
   const [locationLoading, setLocationLoading] = useState(false);
@@ -50,7 +53,7 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
 
-  const [permission, requestPermission] = Location.useForegroundPermissions();
+  const [, requestPermission] = Location.useForegroundPermissions();
 
   const apiParams = coords
     ? { lat: coords.lat, lng: coords.lng, radius: radiusMetres }
@@ -163,6 +166,16 @@ export default function HomeScreen() {
             </View>
           )}
 
+          {/* Show saved chippies count on welcome screen if any */}
+          {favsLoaded && favourites.length > 0 && (
+            <View style={styles.favHint}>
+              <MaterialCommunityIcons name="heart" size={13} color="#ef4444" />
+              <Text style={styles.favHintText}>
+                {favourites.length} saved chippy{favourites.length !== 1 ? "s" : ""}
+              </Text>
+            </View>
+          )}
+
           <Pressable
             style={({ pressed }) => [styles.mainBtn, pressed && { opacity: 0.85 }]}
             onPress={() => {
@@ -192,7 +205,7 @@ export default function HomeScreen() {
     );
   }
 
-  // ── Shared header (appbar + radius row) ──────────────────────────────────────
+  // ── Shared header ────────────────────────────────────────────────────────────
   const AppBar = (
     <View style={[styles.appBar, { paddingTop: topPad + 12 }]}>
       <View style={styles.appBarLeft}>
@@ -200,29 +213,20 @@ export default function HomeScreen() {
         <Text style={styles.appBarTitle}>Chippy Finder</Text>
       </View>
 
-      {/* List / Map toggle */}
       <View style={styles.viewToggle}>
         <TouchableOpacity
           style={[styles.toggleBtn, viewMode === "list" && styles.toggleBtnActive]}
           onPress={() => onToggleView("list")}
           testID="button-view-list"
         >
-          <Feather
-            name="list"
-            size={16}
-            color={viewMode === "list" ? "#1A1A1A" : colors.mutedForeground}
-          />
+          <Feather name="list" size={16} color={viewMode === "list" ? "#1A1A1A" : colors.mutedForeground} />
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.toggleBtn, viewMode === "map" && styles.toggleBtnActive]}
           onPress={() => onToggleView("map")}
           testID="button-view-map"
         >
-          <Feather
-            name="map"
-            size={16}
-            color={viewMode === "map" ? "#1A1A1A" : colors.mutedForeground}
-          />
+          <Feather name="map" size={16} color={viewMode === "map" ? "#1A1A1A" : colors.mutedForeground} />
         </TouchableOpacity>
       </View>
 
@@ -241,10 +245,7 @@ export default function HomeScreen() {
       {RADIUS_OPTIONS.map((opt) => (
         <TouchableOpacity
           key={opt.value}
-          style={[
-            styles.radiusChip,
-            radiusMetres === opt.value && { backgroundColor: colors.primary },
-          ]}
+          style={[styles.radiusChip, radiusMetres === opt.value && { backgroundColor: colors.primary }]}
           onPress={() => onRadiusChange(opt.value)}
           testID={`button-radius-${opt.value}`}
         >
@@ -263,7 +264,7 @@ export default function HomeScreen() {
 
   const isDataLoading = shopsLoading || summaryLoading;
 
-  // ── Data loading skeleton ────────────────────────────────────────────────────
+  // ── Loading skeleton ─────────────────────────────────────────────────────────
   if (isDataLoading) {
     return (
       <View style={[styles.container, { paddingBottom: Platform.OS === "web" ? 34 : 0 }]}>
@@ -274,7 +275,7 @@ export default function HomeScreen() {
     );
   }
 
-  // ── Error ───────────────────────────────────────────────────────────────────
+  // ── Error ────────────────────────────────────────────────────────────────────
   if (shopsError) {
     return (
       <View style={[styles.container, { paddingTop: topPad, paddingBottom: Platform.OS === "web" ? 34 : 0 }]}>
@@ -302,7 +303,12 @@ export default function HomeScreen() {
         <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
         {AppBar}
         {RadiusRow}
-        <ChippyMap coords={coords!} shops={shops ?? []} radiusMetres={radiusMetres} />
+        <ChippyMap
+          coords={coords!}
+          shops={shops ?? []}
+          radiusMetres={radiusMetres}
+          favouriteIds={favouriteIds}
+        />
       </View>
     );
   }
@@ -310,6 +316,15 @@ export default function HomeScreen() {
   // ── List view ────────────────────────────────────────────────────────────────
   const ListHeader = (
     <View>
+      {favsLoaded && favourites.length > 0 && (
+        <FavouritesRail
+          favourites={favourites}
+          onRemove={(id) => {
+            const shop = favourites.find((f) => f.id === id);
+            if (shop) toggleFavourite(shop);
+          }}
+        />
+      )}
       {!!summary && <SummaryBanner summary={summary} />}
       {!!shops && shops.length > 0 && (
         <Text style={styles.sectionLabel}>
@@ -325,7 +340,13 @@ export default function HomeScreen() {
       <FlatList
         data={shops ?? []}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <ShopCard shop={item} />}
+        renderItem={({ item }) => (
+          <ShopCard
+            shop={item}
+            isFavourite={isFavourite(item.id)}
+            onToggleFavourite={toggleFavourite}
+          />
+        )}
         ListHeaderComponent={
           <>
             {AppBar}
@@ -349,7 +370,6 @@ export default function HomeScreen() {
             colors={[colors.primary]}
           />
         }
-        scrollEnabled={!!(shops && shops.length > 0)}
         showsVerticalScrollIndicator={false}
       />
     </View>
@@ -402,6 +422,20 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       fontFamily: "Inter_400Regular",
       textAlign: "center",
       lineHeight: 22,
+    },
+    favHint: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      backgroundColor: "#fef2f2",
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 50,
+    },
+    favHintText: {
+      fontSize: 13,
+      fontFamily: "Inter_500Medium",
+      color: "#b91c1c",
     },
     mainBtn: {
       flexDirection: "row",

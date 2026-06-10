@@ -34,11 +34,7 @@ const NATION_META: Record<string, { label: string; bg: string; text: string }> =
   unknown: { label: "GB", bg: "#9CA3AF", text: "#FFFFFF" },
 };
 
-function HygieneBadge({
-  rating,
-}: {
-  rating: number | null | undefined;
-}) {
+function HygieneBadge({ rating }: { rating: number | null | undefined }) {
   if (rating === null || rating === undefined) {
     return (
       <View style={[hStyles.badge, { backgroundColor: "#F3F4F6" }]}>
@@ -71,7 +67,15 @@ const hStyles = StyleSheet.create({
   },
 });
 
-export default function ShopCard({ shop }: { shop: ChipShop }) {
+export default function ShopCard({
+  shop,
+  isFavourite = false,
+  onToggleFavourite,
+}: {
+  shop: ChipShop;
+  isFavourite?: boolean;
+  onToggleFavourite?: (shop: ChipShop) => void;
+}) {
   const colors = useColors();
   const nation = NATION_META[shop.nation] ?? NATION_META.unknown;
   const styles = makeStyles(colors);
@@ -97,11 +101,13 @@ export default function ShopCard({ shop }: { shop: ChipShop }) {
     Linking.openURL(url);
   };
 
-  const hasActions = !!(shop.phone || shop.website);
-
   return (
     <Pressable
-      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+      style={({ pressed }) => [
+        styles.card,
+        isFavourite && styles.cardFav,
+        pressed && styles.cardPressed,
+      ]}
       onPress={openMaps}
       testID={`card-shop-${shop.id}`}
     >
@@ -117,8 +123,24 @@ export default function ShopCard({ shop }: { shop: ChipShop }) {
             <HygieneBadge rating={shop.hygieneRating} />
           </View>
         </View>
-        <View style={styles.distancePill}>
-          <Text style={styles.distanceText}>{formatDistance(shop.distanceMetres)}</Text>
+        <View style={styles.topRight}>
+          <View style={styles.distancePill}>
+            <Text style={styles.distanceText}>{formatDistance(shop.distanceMetres)}</Text>
+          </View>
+          {!!onToggleFavourite && (
+            <TouchableOpacity
+              style={[styles.heartBtn, isFavourite && styles.heartBtnActive]}
+              onPress={() => onToggleFavourite(shop)}
+              testID={`button-favourite-${shop.id}`}
+              hitSlop={6}
+            >
+              <MaterialCommunityIcons
+                name={isFavourite ? "heart" : "heart-outline"}
+                size={18}
+                color={isFavourite ? "#ef4444" : colors.mutedForeground}
+              />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -140,7 +162,7 @@ export default function ShopCard({ shop }: { shop: ChipShop }) {
         </View>
       )}
 
-      {hasActions && (
+      {!!(shop.phone || shop.website) && (
         <View style={styles.actions}>
           {!!shop.phone && (
             <TouchableOpacity
@@ -189,6 +211,9 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       borderWidth: 1,
       borderColor: colors.border,
     },
+    cardFav: {
+      borderColor: "#ef444428",
+    },
     cardPressed: {
       opacity: 0.93,
     },
@@ -201,6 +226,10 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     },
     topLeft: {
       flex: 1,
+      gap: 6,
+    },
+    topRight: {
+      alignItems: "flex-end",
       gap: 6,
     },
     name: {
@@ -239,6 +268,17 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       fontWeight: "700" as const,
       fontFamily: "Inter_700Bold",
       color: "#9A6B00",
+    },
+    heartBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 8,
+      backgroundColor: colors.secondary,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    heartBtnActive: {
+      backgroundColor: "#fef2f2",
     },
     infoRow: {
       flexDirection: "row",

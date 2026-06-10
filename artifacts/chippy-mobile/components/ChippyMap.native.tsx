@@ -32,7 +32,8 @@ function formatDistance(m: number): string {
   return `${(m / 1000).toFixed(1)}km`;
 }
 
-function pinColor(rating: number | null | undefined): string {
+function pinColor(rating: number | null | undefined, isFav: boolean): string {
+  if (isFav) return "#FFAD00";
   if (rating === null || rating === undefined) return "#9CA3AF";
   if (rating >= 4) return "#16a34a";
   if (rating >= 2) return "#d97706";
@@ -57,16 +58,19 @@ export default function ChippyMap({
   coords,
   shops,
   radiusMetres,
+  favouriteIds = [],
 }: {
   coords: { lat: number; lng: number };
   shops: ChipShop[];
   radiusMetres: number;
+  favouriteIds?: string[];
 }) {
   const colors = useColors();
   const styles = makeStyles(colors);
   const [selected, setSelected] = useState<ChipShop | null>(null);
 
   const delta = RADIUS_DELTA[radiusMetres] ?? 0.1;
+  const favSet = new Set(favouriteIds);
 
   const openMaps = (shop: ChipShop) => {
     Haptics.selectionAsync();
@@ -80,6 +84,11 @@ export default function ChippyMap({
     Haptics.selectionAsync();
     Linking.openURL(`tel:${phone.replace(/\s/g, "")}`);
   };
+
+  // Render favourite pins last so they appear on top of others
+  const sortedShops = [...shops].sort((a, b) =>
+    (favSet.has(a.id) ? 1 : 0) - (favSet.has(b.id) ? 1 : 0),
+  );
 
   return (
     <View style={styles.container}>
@@ -96,23 +105,30 @@ export default function ChippyMap({
         onPress={() => setSelected(null)}
         testID="map-view"
       >
-        {shops.map((shop) => (
-          <Marker
-            key={shop.id}
-            coordinate={{ latitude: shop.lat, longitude: shop.lng }}
-            pinColor={pinColor(shop.hygieneRating)}
-            onPress={(e) => {
-              e.stopPropagation();
-              Haptics.selectionAsync();
-              setSelected(shop);
-            }}
-            testID={`marker-shop-${shop.id}`}
-          />
-        ))}
+        {sortedShops.map((shop) => {
+          const isFav = favSet.has(shop.id);
+          return (
+            <Marker
+              key={shop.id}
+              coordinate={{ latitude: shop.lat, longitude: shop.lng }}
+              pinColor={pinColor(shop.hygieneRating, isFav)}
+              onPress={(e) => {
+                e.stopPropagation();
+                Haptics.selectionAsync();
+                setSelected(shop);
+              }}
+              testID={`marker-shop-${shop.id}`}
+            />
+          );
+        })}
       </MapView>
 
       {/* Legend */}
       <View style={styles.legend}>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendDot, { backgroundColor: "#FFAD00" }]} />
+          <Text style={styles.legendText}>saved</Text>
+        </View>
         <View style={styles.legendItem}>
           <View style={[styles.legendDot, { backgroundColor: "#16a34a" }]} />
           <Text style={styles.legendText}>4–5</Text>
@@ -135,21 +151,23 @@ export default function ChippyMap({
       <View style={styles.countPill}>
         <Text style={styles.countText}>
           {shops.length} chippy{shops.length !== 1 ? "s" : ""}
+          {favouriteIds.length > 0 ? `  ❤️ ${favouriteIds.length}` : ""}
         </Text>
       </View>
 
       {/* Selected shop card */}
       {selected && (
-        <View style={styles.bottomCard}>
+        <View style={[styles.bottomCard, favSet.has(selected.id) && styles.bottomCardFav]}>
           <View style={styles.cardHeader}>
             <View style={styles.cardTitleRow}>
+              {favSet.has(selected.id) && (
+                <MaterialCommunityIcons name="heart" size={14} color="#ef4444" />
+              )}
               <Text style={styles.cardName} numberOfLines={1}>
                 {selected.name}
               </Text>
               <View style={styles.distPill}>
-                <Text style={styles.distText}>
-                  {formatDistance(selected.distanceMetres)}
-                </Text>
+                <Text style={styles.distText}>{formatDistance(selected.distanceMetres)}</Text>
               </View>
             </View>
             <TouchableOpacity
@@ -190,10 +208,7 @@ export default function ChippyMap({
 
           <View style={styles.cardActions}>
             <Pressable
-              style={({ pressed }) => [
-                styles.actionPrimary,
-                pressed && { opacity: 0.85 },
-              ]}
+              style={({ pressed }) => [styles.actionPrimary, pressed && { opacity: 0.85 }]}
               onPress={() => openMaps(selected)}
               testID={`button-map-directions-${selected.id}`}
             >
@@ -218,12 +233,8 @@ export default function ChippyMap({
 
 function makeStyles(colors: ReturnType<typeof useColors>) {
   return StyleSheet.create({
-    container: {
-      flex: 1,
-    },
-    map: {
-      flex: 1,
-    },
+    container: { flex: 1 },
+    map: { flex: 1 },
     legend: {
       position: "absolute",
       top: 12,
@@ -240,16 +251,8 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       borderWidth: 1,
       borderColor: colors.border,
     },
-    legendItem: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-    },
-    legendDot: {
-      width: 10,
-      height: 10,
-      borderRadius: 5,
-    },
+    legendItem: { flexDirection: "row", alignItems: "center", gap: 6 },
+    legendDot: { width: 10, height: 10, borderRadius: 5 },
     legendText: {
       fontSize: 11,
       fontFamily: "Inter_500Medium",
@@ -292,6 +295,9 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       borderColor: colors.border,
       gap: 6,
     },
+    bottomCardFav: {
+      borderColor: "#ef444428",
+    },
     cardHeader: {
       flexDirection: "row",
       alignItems: "flex-start",
@@ -302,7 +308,7 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       flex: 1,
       flexDirection: "row",
       alignItems: "center",
-      gap: 8,
+      gap: 6,
       flexWrap: "wrap",
     },
     cardName: {
@@ -334,11 +340,7 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       alignItems: "center",
       justifyContent: "center",
     },
-    infoRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-    },
+    infoRow: { flexDirection: "row", alignItems: "center", gap: 6 },
     infoText: {
       flex: 1,
       fontSize: 13,
