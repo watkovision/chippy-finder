@@ -18,6 +18,7 @@ import {
   StatusBar,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -52,6 +53,9 @@ export default function HomeScreen() {
   const [radiusMetres, setRadiusMetres] = useState(5000);
   const [refreshing, setRefreshing] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [postcodeInput, setPostcodeInput] = useState("");
+  const [postcodeLoading, setPostcodeLoading] = useState(false);
+  const [postcodeError, setPostcodeError] = useState<string | null>(null);
 
   const [, requestPermission] = Location.useForegroundPermissions();
 
@@ -115,6 +119,28 @@ export default function HomeScreen() {
     }
   }, [requestPermission]);
 
+  const geocodePostcode = useCallback(async (query: string) => {
+    setPostcodeLoading(true);
+    setPostcodeError(null);
+    try {
+      const encoded = encodeURIComponent(query.trim());
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encoded}&format=json&limit=1&countrycodes=gb`,
+        { headers: { "User-Agent": "ChippyFinder/1.0" } },
+      );
+      const data = await res.json();
+      if (!data.length) {
+        setPostcodeError("Postcode not found — try a town name instead");
+        return;
+      }
+      setCoords({ lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) });
+    } catch {
+      setPostcodeError("Couldn't look up that location — check your connection");
+    } finally {
+      setPostcodeLoading(false);
+    }
+  }, []);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await Promise.all([refetchShops(), refetchSummary()]);
@@ -151,7 +177,7 @@ export default function HomeScreen() {
           {locationError === "denied" && (
             <View style={styles.errorBox}>
               <Feather name="lock" size={14} color={colors.destructive} />
-              <Text style={styles.errorMsg}>Location permission denied.</Text>
+              <Text style={styles.errorMsg}>Location blocked — use postcode below.</Text>
               {Platform.OS !== "web" && (
                 <TouchableOpacity onPress={() => Linking.openSettings()} testID="button-open-settings">
                   <Text style={styles.errorLink}>Open Settings</Text>
@@ -162,7 +188,7 @@ export default function HomeScreen() {
           {locationError === "error" && (
             <View style={styles.errorBox}>
               <Feather name="alert-circle" size={14} color={colors.destructive} />
-              <Text style={styles.errorMsg}>Could not get your location.</Text>
+              <Text style={styles.errorMsg}>Location unavailable — use postcode below.</Text>
             </View>
           )}
 
@@ -185,8 +211,50 @@ export default function HomeScreen() {
             testID="button-find-chippy"
           >
             <Feather name="map-pin" size={17} color="#1A1A1A" />
-            <Text style={styles.mainBtnText}>Find my nearest chippy</Text>
+            <Text style={styles.mainBtnText}>Use my location</Text>
           </Pressable>
+
+          {/* Postcode / town fallback */}
+          <View style={styles.orRow}>
+            <View style={styles.orLine} />
+            <Text style={styles.orText}>or</Text>
+            <View style={styles.orLine} />
+          </View>
+
+          <View style={styles.postcodeRow}>
+            <TextInput
+              style={[styles.postcodeInput, { color: colors.foreground, borderColor: colors.border }]}
+              placeholder="Postcode or town…"
+              placeholderTextColor={colors.mutedForeground}
+              value={postcodeInput}
+              onChangeText={(t) => { setPostcodeInput(t); setPostcodeError(null); }}
+              autoCapitalize="characters"
+              returnKeyType="search"
+              onSubmitEditing={() => { if (postcodeInput.trim()) geocodePostcode(postcodeInput); }}
+              testID="input-postcode"
+            />
+            <TouchableOpacity
+              style={[
+                styles.postcodeBtn,
+                { backgroundColor: postcodeInput.trim() ? colors.primary : colors.secondary },
+              ]}
+              onPress={() => { if (postcodeInput.trim()) geocodePostcode(postcodeInput); }}
+              disabled={!postcodeInput.trim() || postcodeLoading}
+              testID="button-postcode-search"
+            >
+              {postcodeLoading
+                ? <ActivityIndicator size="small" color="#1A1A1A" />
+                : <Feather name="search" size={16} color={postcodeInput.trim() ? "#1A1A1A" : colors.mutedForeground} />
+              }
+            </TouchableOpacity>
+          </View>
+
+          {!!postcodeError && (
+            <View style={styles.errorBox}>
+              <Feather name="alert-circle" size={13} color={colors.destructive} />
+              <Text style={styles.errorMsg}>{postcodeError}</Text>
+            </View>
+          )}
         </View>
       </View>
     );
@@ -583,6 +651,44 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       fontSize: 14,
       color: colors.mutedForeground,
       fontFamily: "Inter_400Regular",
+    },
+    orRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      width: "100%",
+    },
+    orLine: {
+      flex: 1,
+      height: 1,
+      backgroundColor: colors.border,
+    },
+    orText: {
+      fontSize: 13,
+      fontFamily: "Inter_400Regular",
+      color: colors.mutedForeground,
+    },
+    postcodeRow: {
+      flexDirection: "row",
+      width: "100%",
+      gap: 8,
+    },
+    postcodeInput: {
+      flex: 1,
+      height: 48,
+      borderWidth: 1.5,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      fontSize: 15,
+      fontFamily: "Inter_400Regular",
+      backgroundColor: colors.card,
+    },
+    postcodeBtn: {
+      width: 48,
+      height: 48,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
     },
   });
 }
