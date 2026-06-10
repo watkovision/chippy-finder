@@ -4,7 +4,7 @@ import {
   getListNearbyChipShopsQueryKey,
   useGetNearbySummary,
   useListNearbyChipShops,
-} from "@workspace/api-client-react";
+} from "@/api-client";
 import * as Haptics from "expo-haptics";
 import * as Location from "expo-location";
 import React, { useCallback, useState } from "react";
