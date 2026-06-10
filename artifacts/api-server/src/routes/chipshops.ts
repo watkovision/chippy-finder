@@ -4,6 +4,14 @@ import { logger } from "../lib/logger";
 
 const router = Router();
 
+// Simple in-memory cache: key → { data, expiresAt }
+const overpassCache = new Map<string, { data: OverpassNode[]; expiresAt: number }>();
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+function cacheKey(lat: number, lng: number, radiusMetres: number): string {
+  return `${lat.toFixed(3)},${lng.toFixed(3)},${radiusMetres}`;
+}
+
 const FUN_FACTS = [
   "There are around 10,500 fish and chip shops in the UK — more than McDonald's, KFC and Burger King combined!",
   "British people eat approximately 382 million portions of fish and chips every year.",
@@ -98,13 +106,20 @@ async function fetchOverpassChipShops(
   lng: number,
   radiusMetres: number,
 ): Promise<OverpassNode[]> {
+  const key = cacheKey(lat, lng, radiusMetres);
+  const cached = overpassCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) {
+    logger.info({ key }, "Overpass cache hit");
+    return cached.data;
+  }
+
+  // Name-regex queries are very slow on dense areas — use only indexed tag queries
   const query = `
-[out:json][timeout:25];
+[out:json][timeout:40];
 (
   node["amenity"="fast_food"]["cuisine"~"fish_and_chips|fish|chippy",i](around:${radiusMetres},${lat},${lng});
-  node["amenity"="fast_food"]["name"~"chip|chippy|fish|fryer|fry|plaice|haddock|cod",i](around:${radiusMetres},${lat},${lng});
   node["shop"="fish_and_chips"](around:${radiusMetres},${lat},${lng});
-  node["amenity"="restaurant"]["cuisine"~"fish_and_chips|fish",i](around:${radiusMetres},${lat},${lng});
+  node["amenity"="restaurant"]["cuisine"~"fish_and_chips",i](around:${radiusMetres},${lat},${lng});
   way["amenity"="fast_food"]["cuisine"~"fish_and_chips|fish|chippy",i](around:${radiusMetres},${lat},${lng});
   way["shop"="fish_and_chips"](around:${radiusMetres},${lat},${lng});
 );
@@ -112,9 +127,12 @@ out center;`;
 
   const response = await fetch("https://overpass-api.de/api/interpreter", {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "User-Agent": "ChippyFinder/1.0",
+    },
     body: `data=${encodeURIComponent(query)}`,
-    signal: AbortSignal.timeout(20000),
+    signal: AbortSignal.timeout(45000),
   });
 
   if (!response.ok) {
@@ -123,12 +141,15 @@ out center;`;
 
   const json = (await response.json()) as { elements: Array<OverpassNode & { type: string; center?: { lat: number; lon: number } }> };
 
-  return json.elements.map((el) => ({
+  const nodes = json.elements.map((el) => ({
     id: el.id,
     lat: el.center ? el.center.lat : el.lat,
     lon: el.center ? el.center.lon : el.lon,
     tags: el.tags || {},
   }));
+
+  overpassCache.set(key, { data: nodes, expiresAt: Date.now() + CACHE_TTL_MS });
+  return nodes;
 }
 
 async function fetchFsaRating(
