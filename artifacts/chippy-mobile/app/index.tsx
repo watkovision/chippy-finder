@@ -23,6 +23,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import ChippyMap from "@/components/ChippyMap";
 import LoadingSkeletons from "@/components/LoadingSkeletons";
 import ShopCard from "@/components/ShopCard";
 import SummaryBanner from "@/components/SummaryBanner";
@@ -36,6 +37,7 @@ const RADIUS_OPTIONS = [
 ];
 
 type Coords = { lat: number; lng: number };
+type ViewMode = "list" | "map";
 
 export default function HomeScreen() {
   const colors = useColors();
@@ -46,6 +48,7 @@ export default function HomeScreen() {
   const [locationError, setLocationError] = useState<"denied" | "error" | null>(null);
   const [radiusMetres, setRadiusMetres] = useState(5000);
   const [refreshing, setRefreshing] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
 
   const [permission, requestPermission] = Location.useForegroundPermissions();
 
@@ -79,7 +82,6 @@ export default function HomeScreen() {
   const fetchLocation = useCallback(async () => {
     setLocationLoading(true);
     setLocationError(null);
-
     try {
       if (Platform.OS === "web") {
         await new Promise<void>((resolve, reject) => {
@@ -121,9 +123,15 @@ export default function HomeScreen() {
     setRadiusMetres(r);
   };
 
+  const onToggleView = (mode: ViewMode) => {
+    Haptics.selectionAsync();
+    setViewMode(mode);
+  };
+
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const styles = makeStyles(colors);
 
+  // ── Welcome ─────────────────────────────────────────────────────────────────
   if (!coords && !locationLoading) {
     return (
       <View style={[styles.container, { paddingTop: topPad }]}>
@@ -132,7 +140,6 @@ export default function HomeScreen() {
           <View style={styles.iconWrap}>
             <MaterialCommunityIcons name="fish" size={52} color={colors.primary} />
           </View>
-
           <Text style={styles.welcomeTitle}>Hungry for chips?</Text>
           <Text style={styles.welcomeSub}>
             Find the nearest fish &amp; chip shop in England, Wales and Scotland — with official hygiene ratings.
@@ -143,16 +150,12 @@ export default function HomeScreen() {
               <Feather name="lock" size={14} color={colors.destructive} />
               <Text style={styles.errorMsg}>Location permission denied.</Text>
               {Platform.OS !== "web" && (
-                <TouchableOpacity
-                  onPress={() => Linking.openSettings()}
-                  testID="button-open-settings"
-                >
+                <TouchableOpacity onPress={() => Linking.openSettings()} testID="button-open-settings">
                   <Text style={styles.errorLink}>Open Settings</Text>
                 </TouchableOpacity>
               )}
             </View>
           )}
-
           {locationError === "error" && (
             <View style={styles.errorBox}>
               <Feather name="alert-circle" size={14} color={colors.destructive} />
@@ -176,6 +179,7 @@ export default function HomeScreen() {
     );
   }
 
+  // ── Locating ────────────────────────────────────────────────────────────────
   if (locationLoading) {
     return (
       <View style={[styles.container, styles.centered, { paddingTop: topPad }]}>
@@ -188,72 +192,89 @@ export default function HomeScreen() {
     );
   }
 
-  const isDataLoading = shopsLoading || summaryLoading;
+  // ── Shared header (appbar + radius row) ──────────────────────────────────────
+  const AppBar = (
+    <View style={[styles.appBar, { paddingTop: topPad + 12 }]}>
+      <View style={styles.appBarLeft}>
+        <MaterialCommunityIcons name="fish" size={20} color={colors.primary} />
+        <Text style={styles.appBarTitle}>Chippy Finder</Text>
+      </View>
 
-  const ListHeader = (
-    <View>
-      <View style={[styles.appBar, { paddingTop: topPad + 12 }]}>
-        <View style={styles.appBarLeft}>
-          <MaterialCommunityIcons name="fish" size={20} color={colors.primary} />
-          <Text style={styles.appBarTitle}>Chippy Finder</Text>
-        </View>
+      {/* List / Map toggle */}
+      <View style={styles.viewToggle}>
         <TouchableOpacity
-          onPress={fetchLocation}
-          style={styles.locBtn}
-          testID="button-refresh-location"
+          style={[styles.toggleBtn, viewMode === "list" && styles.toggleBtnActive]}
+          onPress={() => onToggleView("list")}
+          testID="button-view-list"
         >
-          <Feather name="map-pin" size={17} color={colors.mutedForeground} />
+          <Feather
+            name="list"
+            size={16}
+            color={viewMode === "list" ? "#1A1A1A" : colors.mutedForeground}
+          />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.toggleBtn, viewMode === "map" && styles.toggleBtnActive]}
+          onPress={() => onToggleView("map")}
+          testID="button-view-map"
+        >
+          <Feather
+            name="map"
+            size={16}
+            color={viewMode === "map" ? "#1A1A1A" : colors.mutedForeground}
+          />
         </TouchableOpacity>
       </View>
 
-      <View style={styles.radiusRow}>
-        {RADIUS_OPTIONS.map((opt) => (
-          <TouchableOpacity
-            key={opt.value}
-            style={[
-              styles.radiusChip,
-              radiusMetres === opt.value && { backgroundColor: colors.primary },
-            ]}
-            onPress={() => onRadiusChange(opt.value)}
-            testID={`button-radius-${opt.value}`}
-          >
-            <Text
-              style={[
-                styles.radiusChipText,
-                radiusMetres === opt.value && styles.radiusChipTextActive,
-              ]}
-            >
-              {opt.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {!!summary && !isDataLoading && <SummaryBanner summary={summary} />}
-
-      {!isDataLoading && !!shops && shops.length > 0 && (
-        <Text style={styles.sectionLabel}>
-          {shops.length} chip shop{shops.length !== 1 ? "s" : ""} nearby
-        </Text>
-      )}
+      <TouchableOpacity
+        onPress={fetchLocation}
+        style={styles.locBtn}
+        testID="button-refresh-location"
+      >
+        <Feather name="map-pin" size={17} color={colors.mutedForeground} />
+      </TouchableOpacity>
     </View>
   );
 
+  const RadiusRow = (
+    <View style={styles.radiusRow}>
+      {RADIUS_OPTIONS.map((opt) => (
+        <TouchableOpacity
+          key={opt.value}
+          style={[
+            styles.radiusChip,
+            radiusMetres === opt.value && { backgroundColor: colors.primary },
+          ]}
+          onPress={() => onRadiusChange(opt.value)}
+          testID={`button-radius-${opt.value}`}
+        >
+          <Text
+            style={[
+              styles.radiusChipText,
+              radiusMetres === opt.value && styles.radiusChipTextActive,
+            ]}
+          >
+            {opt.label}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+
+  const isDataLoading = shopsLoading || summaryLoading;
+
+  // ── Data loading skeleton ────────────────────────────────────────────────────
   if (isDataLoading) {
     return (
       <View style={[styles.container, { paddingBottom: Platform.OS === "web" ? 34 : 0 }]}>
         <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
-        <View style={[styles.appBar, { paddingTop: topPad + 12 }]}>
-          <View style={styles.appBarLeft}>
-            <MaterialCommunityIcons name="fish" size={20} color={colors.primary} />
-            <Text style={styles.appBarTitle}>Chippy Finder</Text>
-          </View>
-        </View>
+        {AppBar}
         <LoadingSkeletons />
       </View>
     );
   }
 
+  // ── Error ───────────────────────────────────────────────────────────────────
   if (shopsError) {
     return (
       <View style={[styles.container, { paddingTop: topPad, paddingBottom: Platform.OS === "web" ? 34 : 0 }]}>
@@ -274,19 +295,44 @@ export default function HomeScreen() {
     );
   }
 
+  // ── Map view ─────────────────────────────────────────────────────────────────
+  if (viewMode === "map") {
+    return (
+      <View style={[styles.container, { paddingBottom: Platform.OS === "web" ? 34 : 0 }]}>
+        <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+        {AppBar}
+        {RadiusRow}
+        <ChippyMap coords={coords!} shops={shops ?? []} radiusMetres={radiusMetres} />
+      </View>
+    );
+  }
+
+  // ── List view ────────────────────────────────────────────────────────────────
+  const ListHeader = (
+    <View>
+      {!!summary && <SummaryBanner summary={summary} />}
+      {!!shops && shops.length > 0 && (
+        <Text style={styles.sectionLabel}>
+          {shops.length} chip shop{shops.length !== 1 ? "s" : ""} nearby
+        </Text>
+      )}
+    </View>
+  );
+
   return (
-    <View
-      style={[
-        styles.container,
-        { paddingBottom: Platform.OS === "web" ? 34 : 0 },
-      ]}
-    >
+    <View style={[styles.container, { paddingBottom: Platform.OS === "web" ? 34 : 0 }]}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
       <FlatList
         data={shops ?? []}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => <ShopCard shop={item} />}
-        ListHeaderComponent={ListHeader}
+        ListHeaderComponent={
+          <>
+            {AppBar}
+            {RadiusRow}
+            {ListHeader}
+          </>
+        }
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Feather name="search" size={36} color={colors.mutedForeground} />
@@ -416,6 +462,23 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       fontWeight: "700" as const,
       fontFamily: "Inter_700Bold",
       color: colors.foreground,
+    },
+    viewToggle: {
+      flexDirection: "row",
+      backgroundColor: colors.secondary,
+      borderRadius: 10,
+      padding: 3,
+      gap: 2,
+    },
+    toggleBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 8,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    toggleBtnActive: {
+      backgroundColor: colors.primary,
     },
     locBtn: {
       width: 36,
