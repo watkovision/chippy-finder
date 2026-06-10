@@ -276,10 +276,19 @@ export default function HomeScreen() {
   // ── Shared header ────────────────────────────────────────────────────────────
   const AppBar = (
     <View style={[styles.appBar, { paddingTop: topPad + 12 }]}>
-      <View style={styles.appBarLeft}>
-        <MaterialCommunityIcons name="fish" size={20} color={colors.primary} />
-        <Text style={styles.appBarTitle}>Chippy Finder</Text>
-      </View>
+      <TouchableOpacity
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          setCoords(null);
+          setPostcodeInput("");
+          setPostcodeError(null);
+          setLocationError(null);
+        }}
+        style={styles.backBtn}
+        testID="button-back-to-search"
+      >
+        <Feather name="arrow-left" size={18} color={colors.foreground} />
+      </TouchableOpacity>
 
       <View style={styles.viewToggle}>
         <TouchableOpacity
@@ -583,6 +592,14 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       backgroundColor: colors.primary,
     },
     locBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 9,
+      backgroundColor: colors.secondary,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    backBtn: {
       width: 36,
       height: 36,
       borderRadius: 9,

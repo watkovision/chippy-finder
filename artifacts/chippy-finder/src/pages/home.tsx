@@ -206,14 +206,15 @@ export default function Home() {
                   Found {chipShops.length} shops near you
                 </h3>
                 <div className="flex items-center gap-3">
-                  <span className="text-muted-foreground text-sm font-medium">Sorted by distance</span>
+                  <span className="text-muted-foreground text-sm font-medium hidden sm:inline">Sorted by distance</span>
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
-                    className="text-xs text-muted-foreground"
+                    className="gap-1.5 font-semibold"
                     onClick={() => { setManualLat(null); setManualLng(null); setPostcode(""); }}
                   >
-                    Change location
+                    <Search className="w-3.5 h-3.5" />
+                    New search
                   </Button>
                 </div>
               </div>
