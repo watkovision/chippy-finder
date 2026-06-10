@@ -1,0 +1,491 @@
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import {
+  getGetNearbySummaryQueryKey,
+  getListNearbyChipShopsQueryKey,
+  useGetNearbySummary,
+  useListNearbyChipShops,
+} from "@workspace/api-client-react";
+import * as Haptics from "expo-haptics";
+import * as Location from "expo-location";
+import React, { useCallback, useState } from "react";
+import {
+  ActivityIndicator,
+  FlatList,
+  Linking,
+  Platform,
+  Pressable,
+  RefreshControl,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import LoadingSkeletons from "@/components/LoadingSkeletons";
+import ShopCard from "@/components/ShopCard";
+import SummaryBanner from "@/components/SummaryBanner";
+import { useColors } from "@/hooks/useColors";
+
+const RADIUS_OPTIONS = [
+  { label: "1km", value: 1000 },
+  { label: "2km", value: 2000 },
+  { label: "5km", value: 5000 },
+  { label: "10km", value: 10000 },
+];
+
+type Coords = { lat: number; lng: number };
+
+export default function HomeScreen() {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+
+  const [coords, setCoords] = useState<Coords | null>(null);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationError, setLocationError] = useState<"denied" | "error" | null>(null);
+  const [radiusMetres, setRadiusMetres] = useState(5000);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const [permission, requestPermission] = Location.useForegroundPermissions();
+
+  const apiParams = coords
+    ? { lat: coords.lat, lng: coords.lng, radius: radiusMetres }
+    : undefined;
+
+  const {
+    data: shops,
+    isLoading: shopsLoading,
+    error: shopsError,
+    refetch: refetchShops,
+  } = useListNearbyChipShops(apiParams, {
+    query: {
+      enabled: !!coords,
+      queryKey: getListNearbyChipShopsQueryKey(apiParams),
+    },
+  });
+
+  const {
+    data: summary,
+    isLoading: summaryLoading,
+    refetch: refetchSummary,
+  } = useGetNearbySummary(apiParams, {
+    query: {
+      enabled: !!coords,
+      queryKey: getGetNearbySummaryQueryKey(apiParams),
+    },
+  });
+
+  const fetchLocation = useCallback(async () => {
+    setLocationLoading(true);
+    setLocationError(null);
+
+    try {
+      if (Platform.OS === "web") {
+        await new Promise<void>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+              resolve();
+            },
+            () => reject(new Error("location_error")),
+            { timeout: 12000 },
+          );
+        });
+      } else {
+        const { status } = await requestPermission();
+        if (status !== "granted") {
+          setLocationError("denied");
+          return;
+        }
+        const loc = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        setCoords({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+      }
+    } catch {
+      setLocationError("error");
+    } finally {
+      setLocationLoading(false);
+    }
+  }, [requestPermission]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([refetchShops(), refetchSummary()]);
+    setRefreshing(false);
+  }, [refetchShops, refetchSummary]);
+
+  const onRadiusChange = (r: number) => {
+    Haptics.selectionAsync();
+    setRadiusMetres(r);
+  };
+
+  const topPad = Platform.OS === "web" ? 67 : insets.top;
+  const styles = makeStyles(colors);
+
+  if (!coords && !locationLoading) {
+    return (
+      <View style={[styles.container, { paddingTop: topPad }]}>
+        <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+        <View style={styles.welcome}>
+          <View style={styles.iconWrap}>
+            <MaterialCommunityIcons name="fish" size={52} color={colors.primary} />
+          </View>
+
+          <Text style={styles.welcomeTitle}>Hungry for chips?</Text>
+          <Text style={styles.welcomeSub}>
+            Find the nearest fish &amp; chip shop in England, Wales and Scotland — with official hygiene ratings.
+          </Text>
+
+          {locationError === "denied" && (
+            <View style={styles.errorBox}>
+              <Feather name="lock" size={14} color={colors.destructive} />
+              <Text style={styles.errorMsg}>Location permission denied.</Text>
+              {Platform.OS !== "web" && (
+                <TouchableOpacity
+                  onPress={() => Linking.openSettings()}
+                  testID="button-open-settings"
+                >
+                  <Text style={styles.errorLink}>Open Settings</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+
+          {locationError === "error" && (
+            <View style={styles.errorBox}>
+              <Feather name="alert-circle" size={14} color={colors.destructive} />
+              <Text style={styles.errorMsg}>Could not get your location.</Text>
+            </View>
+          )}
+
+          <Pressable
+            style={({ pressed }) => [styles.mainBtn, pressed && { opacity: 0.85 }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              fetchLocation();
+            }}
+            testID="button-find-chippy"
+          >
+            <Feather name="map-pin" size={17} color="#1A1A1A" />
+            <Text style={styles.mainBtnText}>Find my nearest chippy</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
+  if (locationLoading) {
+    return (
+      <View style={[styles.container, styles.centered, { paddingTop: topPad }]}>
+        <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.welcomeSub, { marginTop: 16, textAlign: "center" }]}>
+          Finding you...
+        </Text>
+      </View>
+    );
+  }
+
+  const isDataLoading = shopsLoading || summaryLoading;
+
+  const ListHeader = (
+    <View>
+      <View style={[styles.appBar, { paddingTop: topPad + 12 }]}>
+        <View style={styles.appBarLeft}>
+          <MaterialCommunityIcons name="fish" size={20} color={colors.primary} />
+          <Text style={styles.appBarTitle}>Chippy Finder</Text>
+        </View>
+        <TouchableOpacity
+          onPress={fetchLocation}
+          style={styles.locBtn}
+          testID="button-refresh-location"
+        >
+          <Feather name="map-pin" size={17} color={colors.mutedForeground} />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.radiusRow}>
+        {RADIUS_OPTIONS.map((opt) => (
+          <TouchableOpacity
+            key={opt.value}
+            style={[
+              styles.radiusChip,
+              radiusMetres === opt.value && { backgroundColor: colors.primary },
+            ]}
+            onPress={() => onRadiusChange(opt.value)}
+            testID={`button-radius-${opt.value}`}
+          >
+            <Text
+              style={[
+                styles.radiusChipText,
+                radiusMetres === opt.value && styles.radiusChipTextActive,
+              ]}
+            >
+              {opt.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {!!summary && !isDataLoading && <SummaryBanner summary={summary} />}
+
+      {!isDataLoading && !!shops && shops.length > 0 && (
+        <Text style={styles.sectionLabel}>
+          {shops.length} chip shop{shops.length !== 1 ? "s" : ""} nearby
+        </Text>
+      )}
+    </View>
+  );
+
+  if (isDataLoading) {
+    return (
+      <View style={[styles.container, { paddingBottom: Platform.OS === "web" ? 34 : 0 }]}>
+        <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+        <View style={[styles.appBar, { paddingTop: topPad + 12 }]}>
+          <View style={styles.appBarLeft}>
+            <MaterialCommunityIcons name="fish" size={20} color={colors.primary} />
+            <Text style={styles.appBarTitle}>Chippy Finder</Text>
+          </View>
+        </View>
+        <LoadingSkeletons />
+      </View>
+    );
+  }
+
+  if (shopsError) {
+    return (
+      <View style={[styles.container, { paddingTop: topPad, paddingBottom: Platform.OS === "web" ? 34 : 0 }]}>
+        <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+        <View style={styles.centered}>
+          <Feather name="wifi-off" size={40} color={colors.mutedForeground} />
+          <Text style={styles.errorTitle}>Couldn't load chip shops</Text>
+          <Text style={styles.errorSub}>Check your connection and try again.</Text>
+          <Pressable
+            style={({ pressed }) => [styles.mainBtn, { marginTop: 20 }, pressed && { opacity: 0.85 }]}
+            onPress={() => refetchShops()}
+            testID="button-retry"
+          >
+            <Text style={styles.mainBtnText}>Try again</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View
+      style={[
+        styles.container,
+        { paddingBottom: Platform.OS === "web" ? 34 : 0 },
+      ]}
+    >
+      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+      <FlatList
+        data={shops ?? []}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => <ShopCard shop={item} />}
+        ListHeaderComponent={ListHeader}
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <Feather name="search" size={36} color={colors.mutedForeground} />
+            <Text style={styles.emptyTitle}>No chip shops found</Text>
+            <Text style={styles.emptySub}>Try increasing the search radius</Text>
+          </View>
+        }
+        contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
+        scrollEnabled={!!(shops && shops.length > 0)}
+        showsVerticalScrollIndicator={false}
+      />
+    </View>
+  );
+}
+
+function makeStyles(colors: ReturnType<typeof useColors>) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    centered: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 32,
+    },
+    welcome: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 36,
+      gap: 14,
+    },
+    iconWrap: {
+      width: 100,
+      height: 100,
+      borderRadius: 24,
+      backgroundColor: colors.card,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 6,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.09,
+      shadowRadius: 10,
+      elevation: 3,
+    },
+    welcomeTitle: {
+      fontSize: 28,
+      fontWeight: "700" as const,
+      fontFamily: "Inter_700Bold",
+      color: colors.foreground,
+      textAlign: "center",
+    },
+    welcomeSub: {
+      fontSize: 15,
+      color: colors.mutedForeground,
+      fontFamily: "Inter_400Regular",
+      textAlign: "center",
+      lineHeight: 22,
+    },
+    mainBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      backgroundColor: colors.primary,
+      paddingHorizontal: 26,
+      paddingVertical: 15,
+      borderRadius: 50,
+      marginTop: 8,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.35,
+      shadowRadius: 10,
+      elevation: 5,
+    },
+    mainBtnText: {
+      fontSize: 16,
+      fontWeight: "600" as const,
+      fontFamily: "Inter_600SemiBold",
+      color: "#1A1A1A",
+    },
+    errorBox: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      backgroundColor: "#FEF2F2",
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderRadius: 10,
+    },
+    errorMsg: {
+      fontSize: 13,
+      color: colors.destructive,
+      fontFamily: "Inter_400Regular",
+    },
+    errorLink: {
+      fontSize: 13,
+      color: colors.destructive,
+      fontFamily: "Inter_600SemiBold",
+      textDecorationLine: "underline",
+    },
+    appBar: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: 20,
+      paddingBottom: 14,
+      backgroundColor: colors.background,
+    },
+    appBarLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    appBarTitle: {
+      fontSize: 20,
+      fontWeight: "700" as const,
+      fontFamily: "Inter_700Bold",
+      color: colors.foreground,
+    },
+    locBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 9,
+      backgroundColor: colors.secondary,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    radiusRow: {
+      flexDirection: "row",
+      paddingHorizontal: 16,
+      gap: 8,
+      marginBottom: 16,
+    },
+    radiusChip: {
+      paddingHorizontal: 14,
+      paddingVertical: 7,
+      borderRadius: 50,
+      backgroundColor: colors.secondary,
+    },
+    radiusChipText: {
+      fontSize: 13,
+      fontFamily: "Inter_500Medium",
+      color: colors.mutedForeground,
+    },
+    radiusChipTextActive: {
+      color: "#1A1A1A",
+      fontFamily: "Inter_700Bold",
+      fontWeight: "700" as const,
+    },
+    sectionLabel: {
+      fontSize: 12,
+      fontFamily: "Inter_600SemiBold",
+      fontWeight: "600" as const,
+      color: colors.mutedForeground,
+      textTransform: "uppercase",
+      letterSpacing: 0.8,
+      paddingHorizontal: 20,
+      paddingBottom: 10,
+    },
+    errorTitle: {
+      fontSize: 17,
+      fontWeight: "600" as const,
+      fontFamily: "Inter_600SemiBold",
+      color: colors.foreground,
+      marginTop: 14,
+    },
+    errorSub: {
+      fontSize: 14,
+      color: colors.mutedForeground,
+      fontFamily: "Inter_400Regular",
+      marginTop: 6,
+      textAlign: "center",
+    },
+    emptyState: {
+      alignItems: "center",
+      paddingTop: 48,
+      gap: 8,
+    },
+    emptyTitle: {
+      fontSize: 17,
+      fontWeight: "600" as const,
+      fontFamily: "Inter_600SemiBold",
+      color: colors.foreground,
+    },
+    emptySub: {
+      fontSize: 14,
+      color: colors.mutedForeground,
+      fontFamily: "Inter_400Regular",
+    },
+  });
+}

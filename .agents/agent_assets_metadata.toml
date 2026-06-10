@@ -1,0 +1,14 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "8PUR59KJt8gkBntsckfG1"
+uri = "file://artifacts/chippy-mobile/assets/images/icon.png"
+type = "image"
+title = "chippy finder app icon"
+
+[[generated]]
+id = "-skvk9YRH5VpkmMY6FPbg"
+uri = "file://artifacts/chippy-mobile/assets/images/splash.png"
+type = "image"
+title = "chippy splash screen"
