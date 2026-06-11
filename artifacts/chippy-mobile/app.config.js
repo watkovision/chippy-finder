@@ -9,10 +9,14 @@
 
 const pkg = require("./package.json");
 
-/** @type {import('expo/config').ExpoConfig} */
-module.exports = {
+const projectId = "0fbc8140-183f-4f81-ad50-3a0547fd8954";
+
+/** @type {import('expo/config').ConfigContext} */
+module.exports = ({ config }) => ({
+  ...config,
   name: "Chippy Finder",
   slug: "chippy-mobile",
+  owner: "watkovision",
   version: pkg.version,
   orientation: "portrait",
   icon: "./assets/images/icon.png",
@@ -38,8 +42,6 @@ module.exports = {
       "android.permission.ACCESS_COARSE_LOCATION",
       "android.permission.ACCESS_FINE_LOCATION",
     ],
-    // Google Maps API key — set via EAS secret GOOGLE_MAPS_API_KEY
-    // Required for production builds; Expo Go works without it
     config: {
       googleMaps: {
         apiKey: process.env.GOOGLE_MAPS_API_KEY ?? "",
@@ -50,12 +52,7 @@ module.exports = {
     favicon: "./assets/images/icon.png",
   },
   plugins: [
-    [
-      "expo-router",
-      {
-        origin: "https://replit.com/",
-      },
-    ],
+    "expo-router",
     "expo-font",
     "expo-web-browser",
     [
@@ -65,9 +62,20 @@ module.exports = {
           "Chippy Finder needs your location to find the nearest fish & chip shops.",
       },
     ],
+    // Must be LAST: restores extra.eas.projectId after any plugin that overwrites extra
+    (cfg) => ({
+      ...cfg,
+      extra: {
+        ...cfg.extra,
+        router: {
+          origin: "https://replit.com/",
+        },
+        eas: { projectId },
+      },
+    }),
   ],
   experiments: {
     typedRoutes: true,
     reactCompiler: true,
   },
-};
+});
