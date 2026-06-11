@@ -21,9 +21,11 @@
       }
     },
     "production": {
-      "config": "production.yml",
       "android": {
         "buildType": "app-bundle"
+      },
+      "pnpm": {
+        "version": "9"
       },
       "env": {
         "EXPO_PUBLIC_DOMAIN": "chip-finder.replit.app"
