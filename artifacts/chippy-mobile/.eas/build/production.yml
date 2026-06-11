@@ -2,9 +2,10 @@ build:
   name: Production Android
   steps:
     - eas/checkout
-    - command: rm -f /home/expo/workingdir/build/pnpm-lock.yaml /home/expo/workingdir/build/pnpm-workspace.yaml
+    - name: Remove pnpm files
+      command: rm -f /home/expo/workingdir/build/pnpm-lock.yaml /home/expo/workingdir/build/pnpm-workspace.yaml
     - eas/install_node_modules
     - eas/prebuild
     - eas/inject_android_credentials
-    - eas/run_gradlew
+    - eas/run_gradle
     - eas/upload_artifact
