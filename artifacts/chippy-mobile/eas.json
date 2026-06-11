@@ -24,7 +24,15 @@
       "android": {
         "buildType": "app-bundle"
       },
-      "pnpm": "9",
+         "production": {
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "pnpm": "10.26.1",
+      "env": {
+        "EXPO_PUBLIC_DOMAIN": "chip-finder.replit.app"
+      }
+    }
       "env": {
         "EXPO_PUBLIC_DOMAIN": "chip-finder.replit.app"
       }
