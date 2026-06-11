@@ -15,7 +15,7 @@ const projectId = "0fbc8140-183f-4f81-ad50-3a0547fd8954";
 module.exports = ({ config }) => ({
   ...config,
   name: "Chippy Finder",
-  slug: "chippy-Finder",
+  slug: "chippy-finder",
   owner: "watkovision",
   version: pkg.version,
   orientation: "portrait",
