@@ -1,0 +1,11 @@
+build:
+  name: Production Android
+  steps:
+    - eas/checkout
+    - name: Install dependencies
+      working_directory: /home/expo/workingdir/build/artifacts/chippy-mobile
+      command: npm install
+    - eas/prebuild
+    - eas/inject_android_credentials
+    - eas/run_gradlew
+    - eas/find_and_upload_build_artifacts
