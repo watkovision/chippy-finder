@@ -3,9 +3,9 @@ build:
   steps:
     - eas/checkout
     - name: Install dependencies
-      working_directory: /home/expo/workingdir/build/artifacts/chippy-mobile
       command: npm install
+      working_directory: /home/expo/workingdir/build/artifacts/chippy-mobile
     - eas/prebuild
     - eas/inject_android_credentials
     - eas/run_gradlew
-    - eas/find_and_upload_build_artifacts
+    - eas/upload_artifact
