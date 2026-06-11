@@ -1,0 +1,38 @@
+name: Update pnpm lockfile
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**/package.json'
+      - 'pnpm-workspace.yaml'
+      - '.npmrc'
+
+jobs:
+  update-lockfile:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Commit updated lockfile
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add pnpm-lock.yaml
+          git diff --staged --quiet || git commit -m "chore: update pnpm lockfile"
+          git push
