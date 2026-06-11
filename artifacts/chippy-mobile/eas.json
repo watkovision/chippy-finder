@@ -17,15 +17,16 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "YOUR-APP-NAME.replit.app"
+        "EXPO_PUBLIC_DOMAIN": "chip-finder.replit.app"
       }
     },
     "production": {
+      "config": ".eas/build/production.yml",
       "android": {
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "YOUR-APP-NAME.replit.app"
+        "EXPO_PUBLIC_DOMAIN": "chip-finder.replit.app"
       }
     }
   },
