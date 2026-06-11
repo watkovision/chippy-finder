@@ -21,7 +21,7 @@
       }
     },
     "production": {
-      "config": ".eas/build/production.yml",
+      "config": "production.yml",
       "android": {
         "buildType": "app-bundle"
       },
